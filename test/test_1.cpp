@@ -14,12 +14,13 @@
  */
 
 // Log to stdout
-#define _DEBUG(x) 								\
-	do { 										\
-		std::cout << "  (" << x << ")" << endl;	\
+#define _DEBUG(x) 										\
+	do { 												\
+		std::cout << "  (" << x << ")" << std::endl;	\
 	} while(0)
 
 
+#include <iostream>
 #include <string>
 #include <cassert>
 #include <boost/shared_ptr.hpp>
@@ -40,15 +41,15 @@ int main(int argc, char **argv) {
 	{
 
 		// Get both available connections
-		shared_ptr<DummyConnection> conn1=pool->borrow();		
-		shared_ptr<DummyConnection> conn2=pool->borrow();		
+		boost::shared_ptr<DummyConnection> conn1=pool->borrow();		
+		boost::shared_ptr<DummyConnection> conn2=pool->borrow();		
 
 		// Trying to get a third should throw
 		cout << "Checking for exception when pool is empty..." << endl;
 		bool exception_thrown=false;
 		try {
 
-			shared_ptr<DummyConnection> conn3=pool->borrow();		
+			boost::shared_ptr<DummyConnection> conn3=pool->borrow();		
 
 		} catch (std::exception& e) {
 
@@ -66,8 +67,8 @@ int main(int argc, char **argv) {
 
 	// We never released pool 2, but it went out of scope.  2 connections should once again be available...
 	cout << "Dirty relase and re-borrow 2 connections.  Will cause destruction of old connections" << endl;
-	shared_ptr<DummyConnection> conn1=pool->borrow();		
-	shared_ptr<DummyConnection> conn2=pool->borrow();		
+	boost::shared_ptr<DummyConnection> conn1=pool->borrow();		
+	boost::shared_ptr<DummyConnection> conn2=pool->borrow();		
 
 	stats=pool->get_stats();
 	assert(stats.pool_size==0);
