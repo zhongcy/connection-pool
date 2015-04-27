@@ -21,8 +21,6 @@
 #include <cppconn/prepared_statement.h>
 #include <cppconn/statement.h>
 
-using boost::shared_ptr;
-
 namespace active911 {
 
 
@@ -61,14 +59,14 @@ namespace active911 {
 		};
 
 		// Any exceptions thrown here should be caught elsewhere
-		shared_ptr<Connection> create() {
+		boost::shared_ptr<Connection> create() {
 
 			// Get the driver
 			sql::Driver *driver;
 			driver=get_driver_instance();
 
 			// Create the connection
-			shared_ptr<MySQLConnection>conn(new MySQLConnection());
+			boost::shared_ptr<MySQLConnection>conn(new MySQLConnection());
 
 			// Connect
 			conn->sql_connection=boost::shared_ptr<sql::Connection>(driver->connect(this->server,this->username,this->password));

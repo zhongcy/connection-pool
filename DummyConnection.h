@@ -14,7 +14,6 @@
  */
 
 #include "ConnectionPool.h"
-using boost::shared_ptr;
 
 namespace active911 {
 
@@ -51,10 +50,10 @@ namespace active911 {
 		};
 
 		// Any exceptions thrown here should be caught elsewhere
-		shared_ptr<Connection> create() {
+		boost::shared_ptr<Connection> create() {
 
 			// Create the connection
-			shared_ptr<DummyConnection>conn(new DummyConnection());
+			boost::shared_ptr<DummyConnection>conn(new DummyConnection());
 
 			// Perform some kind of ->connect operation here
 
