@@ -11,3 +11,6 @@
 *.lai
 *.la
 *.a
+
+# Test Output File
+test/test_[0-9]*

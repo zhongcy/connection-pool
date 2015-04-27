@@ -27,6 +27,8 @@
 // Define your custom logging function by overriding this #define
 #ifndef _DEBUG
 	#define _DEBUG(x)
+#else
+	#define _DEBUG_MODE
 #endif
 
 
@@ -35,6 +37,7 @@
 #include <set>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/format.hpp>
 #include <exception>
 #include <string>
 
@@ -68,6 +71,8 @@ namespace active911 {
 
 		size_t pool_size;
 		size_t borrowed_size;
+		int retry_cnt;
+		int timeout_sec;
 
 	};
 
@@ -86,10 +91,15 @@ namespace active911 {
 			stats.pool_size=this->pool.size();
 			stats.borrowed_size=this->borrowed.size();			
 
+			// retry
+			stats.retry_cnt=this->retry_cnt;
+			stats.timeout_sec=this->timeout_sec;
+
 			return stats;
 		};
 
-		ConnectionPool(size_t pool_size, boost::shared_ptr<ConnectionFactory> factory){
+		ConnectionPool(size_t pool_size, boost::shared_ptr<ConnectionFactory> factory,
+				int retry_cnt=0, int timeout_sec=0){
 
 			// Setup
 			this->pool_size=pool_size;
@@ -101,6 +111,18 @@ namespace active911 {
 				this->pool.push_back(this->factory->create());
 			}
 
+			// retry
+			if(retry_cnt>=0){
+				this->retry_cnt=retry_cnt;
+			}else{
+				this->retry_cnt=0;
+			}
+
+			if(timeout_sec>=0){
+				this->timeout_sec=timeout_sec;
+			}else{
+				this->timeout_sec=0;
+			}
 
 		};
 
@@ -108,6 +130,41 @@ namespace active911 {
 
 
 		};
+
+
+		boost::shared_ptr<T> borrow(){
+
+			int cnt = 0;
+			boost::shared_ptr<T> conn;
+			
+			do{
+				try{
+
+					conn=borrow_impl();
+					break;
+
+				}catch(ConnectionUnavailable& e){
+
+#ifdef _DEBUG_MODE
+					{
+						char msg[128];
+						snprintf(msg,128,"%s (%d/%d)",e.what(),cnt,retry_cnt);
+						_DEBUG(msg);
+					}
+#endif
+
+					if(cnt>=retry_cnt){
+						throw e;
+					}
+
+					sleep(timeout_sec);
+				}
+
+			}while(cnt++<retry_cnt);
+
+			return conn;
+
+		}
 
 		/**
 		 * Borrow
@@ -117,7 +174,7 @@ namespace active911 {
 		 * When done, either (a) call unborrow() to return it, or (b) (if it's bad) just let it go out of scope.  This will cause it to automatically be replaced.
 		 * @retval a shared_ptr to the connection object
 		 */
-		boost::shared_ptr<T> borrow(){
+		boost::shared_ptr<T> borrow_impl(){
 
 			// Lock
 			boost::mutex::scoped_lock lock(this->io_mutex);
@@ -188,6 +245,8 @@ namespace active911 {
 		std::set<boost::shared_ptr<Connection> > borrowed;
 		boost::mutex io_mutex;
 
+		int retry_cnt;
+		int timeout_sec;
 	};
 
 
