@@ -147,7 +147,13 @@ namespace active911 {
 		 */
 		boost::shared_ptr<T> borrow(){
 
-			for(int i=0;i<2;i++) {
+			// retry_cnt 1: no retry, retry_cnt 2: using semaphore timeout
+			int retry_cnt=1;
+			if(timeout_sec){
+				retry_cnt=2;
+			}
+
+			for(int i=0;i<retry_cnt;i++) {
 
 				// Semaphore area
 				int sem_try_ret;
