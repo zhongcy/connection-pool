@@ -23,6 +23,7 @@
  * but return the base class. 	
  */
 
+#pragma once
 
 // Define your custom logging function by overriding this #define
 #ifndef _DEBUG
