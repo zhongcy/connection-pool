@@ -101,7 +101,7 @@ namespace active911 {
 			return stats;
 		};
 
-		ConnectionPool(size_t pool_size, boost::shared_ptr<ConnectionFactory> factory, int timeout_sec=0){
+		ConnectionPool(size_t pool_size, boost::shared_ptr<ConnectionFactory> factory, unsigned int timeout_sec=0){
 
 			// Setup
 			this->pool_size=pool_size;
@@ -148,13 +148,13 @@ namespace active911 {
 		 */
 		boost::shared_ptr<T> borrow(){
 
-			// retry_cnt 1: no retry, retry_cnt 2: using semaphore timeout
-			int retry_cnt=1;
+			// try_cnt 1: one time, try_cnt 2: using semaphore timeout
+			int try_cnt=1;
 			if(timeout_sec){
-				retry_cnt=2;
+				try_cnt=2;
 			}
 
-			for(int i=0;i<retry_cnt;i++) {
+			for(int i=0;i<try_cnt;i++) {
 
 				// Semaphore area
 				int sem_try_ret;
@@ -188,6 +188,8 @@ namespace active911 {
 								return boost::static_pointer_cast<T>(conn);
 
 							} catch(std::exception& e) {
+
+								/* nothing */
 
 							}
 						}
@@ -240,7 +242,7 @@ namespace active911 {
 		std::set<boost::shared_ptr<Connection> > borrowed;
 		boost::mutex io_mutex;
 		sem_t *semaphore;
-		int timeout_sec;
+		unsigned int timeout_sec;
 
 	};
 
