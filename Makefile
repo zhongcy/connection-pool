@@ -7,10 +7,10 @@ all: test
 
 
 test: $(OUTS_TEST)
-	/usr/bin/perl run_tests.pl
+	/usr/bin/env perl run_tests.pl
 
 test/test_%: test/test_%.o
-	$(CXX) $^ -o $@ -L/usr/local/lib -lpthread
+	$(CXX) $^ -o $@ -lpthread -lrt
 
 test/test_%.o: test/test_%.cpp $(DEP_HEAD)
 	$(CXX) -Wall $(INC) -c $< -o $@ --std=c++0x

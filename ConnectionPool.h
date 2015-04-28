@@ -35,11 +35,14 @@
 
 #include <deque>
 #include <set>
+#include <exception>
+#include <string>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/format.hpp>
-#include <exception>
-#include <string>
+#include <semaphore.h>
+#include <fcntl.h>
+#include <time.h>
 
 namespace active911 {
 
@@ -91,15 +94,13 @@ namespace active911 {
 			stats.pool_size=this->pool.size();
 			stats.borrowed_size=this->borrowed.size();			
 
-			// retry
-			stats.retry_cnt=this->retry_cnt;
+			// timeout
 			stats.timeout_sec=this->timeout_sec;
 
 			return stats;
 		};
 
-		ConnectionPool(size_t pool_size, boost::shared_ptr<ConnectionFactory> factory,
-				int retry_cnt=0, int timeout_sec=0){
+		ConnectionPool(size_t pool_size, boost::shared_ptr<ConnectionFactory> factory, int timeout_sec=0){
 
 			// Setup
 			this->pool_size=pool_size;
@@ -111,60 +112,30 @@ namespace active911 {
 				this->pool.push_back(this->factory->create());
 			}
 
-			// retry
-			if(retry_cnt>=0){
-				this->retry_cnt=retry_cnt;
+			// timeout
+			if(timeout_sec>=0){
+
+				this->timeout_sec=timeout_sec;
+
 			}else{
-				this->retry_cnt=0;
+
+				this->timeout_sec=0;
+
 			}
 
-			if(timeout_sec>=0){
-				this->timeout_sec=timeout_sec;
-			}else{
-				this->timeout_sec=0;
-			}
+			sem_unlink("ConnectionPool");
+			semaphore=sem_open("ConnectionPool",O_CREAT,0644,pool_size);
 
 		};
+
 
 		~ConnectionPool() {
 
+			sem_close(semaphore);
+			sem_unlink("ConnectionPool");
 
 		};
 
-
-		boost::shared_ptr<T> borrow(){
-
-			int cnt = 0;
-			boost::shared_ptr<T> conn;
-			
-			do{
-				try{
-
-					conn=borrow_impl();
-					break;
-
-				}catch(ConnectionUnavailable& e){
-
-#ifdef _DEBUG_MODE
-					{
-						char msg[128];
-						snprintf(msg,128,"%s (%d/%d)",e.what(),cnt,retry_cnt);
-						_DEBUG(msg);
-					}
-#endif
-
-					if(cnt>=retry_cnt){
-						throw e;
-					}
-
-					sleep(timeout_sec);
-				}
-
-			}while(cnt++<retry_cnt);
-
-			return conn;
-
-		}
 
 		/**
 		 * Borrow
@@ -174,49 +145,64 @@ namespace active911 {
 		 * When done, either (a) call unborrow() to return it, or (b) (if it's bad) just let it go out of scope.  This will cause it to automatically be replaced.
 		 * @retval a shared_ptr to the connection object
 		 */
-		boost::shared_ptr<T> borrow_impl(){
+		boost::shared_ptr<T> borrow(){
 
-			// Lock
-			boost::mutex::scoped_lock lock(this->io_mutex);
+			for(int i=0;i<2;i++) {
 
-			// Check for a free connection
-			if(this->pool.size()==0){
-
-				// Are there any crashed connections listed as "borrowed"?
-				for(std::set<boost::shared_ptr<Connection> >::iterator it=this->borrowed.begin(); it!=this->borrowed.end(); ++it){
-
-					if((*it).unique()) {
-
-						// This connection has been abandoned! Destroy it and create a new connection
-						try {
-
-							// If we are able to create a new connection, return it
-							_DEBUG("Creating new connection to replace discarded connection");
-							boost::shared_ptr<Connection> conn=this->factory->create();
-							this->borrowed.erase(it);
-							this->borrowed.insert(conn);
-							return boost::static_pointer_cast<T>(conn);
-
-						} catch(std::exception& e) {
-
-							// Error creating a replacement connection
-							throw ConnectionUnavailable();
-						}
-					}
+				// Semaphore area
+				int sem_try_ret;
+				if(i==0){
+					sem_try_ret=sem_trywait(semaphore);
+				}else{
+					struct timespec ts;
+					clock_gettime(CLOCK_REALTIME,&ts);
+					ts.tv_sec+=timeout_sec;
+					sem_try_ret=sem_timedwait(semaphore,&ts);
 				}
 
-				// Nothing available
-				throw ConnectionUnavailable();
+				// Lock
+				boost::mutex::scoped_lock lock(this->io_mutex);
+
+				if (sem_try_ret != 0) {//fail
+
+					// Are there any crashed connections listed as "borrowed"?
+					for(std::set<boost::shared_ptr<Connection> >::iterator it=this->borrowed.begin(); it!=this->borrowed.end(); ++it){
+
+						if((*it).unique()) {
+
+							// This connection has been abandoned! Destroy it and create a new connection
+							try {
+
+								// If we are able to create a new connection, return it
+								_DEBUG("Creating new connection to replace discarded connection");
+								boost::shared_ptr<Connection> conn=this->factory->create();
+								this->borrowed.erase(it);
+								this->borrowed.insert(conn);
+								return boost::static_pointer_cast<T>(conn);
+
+							} catch(std::exception& e) {
+
+							}
+						}
+					}
+
+				} else {
+
+					// Take one off the front
+					boost::shared_ptr<Connection> conn = this->pool.front();
+					this->pool.pop_front();
+
+					// Add it to the borrowed list
+					this->borrowed.insert(conn);
+
+					return boost::static_pointer_cast<T>(conn);
+
+				}
+
 			}
 
-			// Take one off the front
-			boost::shared_ptr<Connection>conn=this->pool.front();
-			this->pool.pop_front();
+			throw ConnectionUnavailable();
 
-			// Add it to the borrowed list
-			this->borrowed.insert(conn);
-
-			return boost::static_pointer_cast<T>(conn);
 		};
 
 		/**
@@ -236,6 +222,8 @@ namespace active911 {
 			// Unborrow
 			this->borrowed.erase(conn);
 
+			// Semaphore post
+			sem_post(semaphore);
 		};
 
 	protected:
@@ -244,12 +232,9 @@ namespace active911 {
 		std::deque<boost::shared_ptr<Connection> > pool;
 		std::set<boost::shared_ptr<Connection> > borrowed;
 		boost::mutex io_mutex;
-
-		int retry_cnt;
+		sem_t *semaphore;
 		int timeout_sec;
+
 	};
-
-
-
 
 }

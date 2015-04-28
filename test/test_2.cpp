@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
 	// Create a pool of 2 dummy connections
 	cout << "Creating connections..." << endl;
 	boost::shared_ptr<DummyConnectionFactory>connection_factory(new DummyConnectionFactory());
-	pool = boost::shared_ptr<ConnectionPool<DummyConnection> >(new ConnectionPool<DummyConnection>(2, connection_factory,2,2));
+	pool = boost::shared_ptr<ConnectionPool<DummyConnection> >(new ConnectionPool<DummyConnection>(2, connection_factory,5));
 	ConnectionPoolStats stats=pool->get_stats();
 	assert(stats.pool_size==2);
 
