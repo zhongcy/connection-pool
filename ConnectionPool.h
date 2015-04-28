@@ -40,10 +40,8 @@
 #include <string>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/thread/locks.hpp>
 #include <boost/format.hpp>
-#include <semaphore.h>
-#include <fcntl.h>
-#include <time.h>
 
 namespace active911 {
 
@@ -124,16 +122,18 @@ namespace active911 {
 
 			}
 
-			sem_unlink("ConnectionPool");
-			semaphore=sem_open("ConnectionPool",O_CREAT,0644,pool_size);
+			// timelock
+			pthread_mutex_init(&timelock_mutex, NULL);
+			pthread_cond_init(&timelock_cond, NULL);
 
 		};
 
 
 		~ConnectionPool() {
 
-			sem_close(semaphore);
-			sem_unlink("ConnectionPool");
+			// timelock
+			pthread_cond_destroy(&timelock_cond);
+			pthread_mutex_destroy(&timelock_mutex);
 
 		};
 
@@ -148,29 +148,18 @@ namespace active911 {
 		 */
 		boost::shared_ptr<T> borrow(){
 
-			// try_cnt 1: one time, try_cnt 2: using semaphore timeout
+			// try_cnt == 1: one time, try_cnt > 2: time wait
 			int try_cnt=1;
 			if(timeout_sec){
 				try_cnt=2;
 			}
 
-			for(int i=0;i<try_cnt;i++) {
-
-				// Semaphore area
-				int sem_try_ret;
-				if(i==0){
-					sem_try_ret=sem_trywait(semaphore);
-				}else{
-					struct timespec ts;
-					clock_gettime(CLOCK_REALTIME,&ts);
-					ts.tv_sec+=timeout_sec;
-					sem_try_ret=sem_timedwait(semaphore,&ts);
-				}
+			while(try_cnt--){
 
 				// Lock
 				boost::mutex::scoped_lock lock(this->io_mutex);
 
-				if (sem_try_ret != 0) {//fail
+				if(pool.empty()) {//fail
 
 					// Are there any crashed connections listed as "borrowed"?
 					for(std::set<boost::shared_ptr<Connection> >::iterator it=this->borrowed.begin(); it!=this->borrowed.end(); ++it){
@@ -189,13 +178,28 @@ namespace active911 {
 
 							} catch(std::exception& e) {
 
-								/* nothing */
+								break;
 
 							}
 						}
 					}
 
-				} else {
+					// Timelock
+					if(try_cnt){
+
+						lock.unlock();
+						struct timeval now;
+						struct timespec ts;
+						gettimeofday(&now, NULL);
+						ts.tv_sec = now.tv_sec + timeout_sec;
+						ts.tv_nsec = now.tv_usec * 1000;
+						pthread_mutex_lock(&timelock_mutex);
+						pthread_cond_timedwait(&timelock_cond, &timelock_mutex, &ts);
+						pthread_mutex_unlock(&timelock_mutex);
+
+					}
+
+				}else{
 
 					// Take one off the front
 					boost::shared_ptr<Connection> conn = this->pool.front();
@@ -231,8 +235,9 @@ namespace active911 {
 			// Unborrow
 			this->borrowed.erase(conn);
 
-			// Semaphore post
-			sem_post(semaphore);
+			// Timelock
+			pthread_cond_signal(&timelock_cond);
+
 		};
 
 	protected:
@@ -241,9 +246,10 @@ namespace active911 {
 		std::deque<boost::shared_ptr<Connection> > pool;
 		std::set<boost::shared_ptr<Connection> > borrowed;
 		boost::mutex io_mutex;
-		sem_t *semaphore;
 		unsigned int timeout_sec;
 
+		pthread_cond_t timelock_cond;
+		pthread_mutex_t timelock_mutex;
 	};
 
 }

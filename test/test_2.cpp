@@ -67,11 +67,15 @@ int main(int argc, char **argv) {
 		assert(exception_thrown);
 
 		// Trying to get a connection in child-thread when main thread unbrrow connection
-		pthread_t thread;
-		pthread_create(&thread,NULL,getConnection,NULL);
-		sleep(3);
+		pthread_t t1, t2;
+		pthread_create(&t1,NULL,getConnection,NULL);
+		pthread_create(&t2,NULL,getConnection,NULL);
+		sleep(2);
 		pool->unborrow(conn2);
-		pthread_join(thread,NULL);
+		sleep(2);
+		pool->unborrow(conn1);
+		pthread_join(t1,NULL);
+		pthread_join(t2,NULL);
 
 
 		// Release one, and make sure it was repatriated (no exception)
