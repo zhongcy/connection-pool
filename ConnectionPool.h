@@ -23,20 +23,25 @@
  * but return the base class. 	
  */
 
+#pragma once
 
 // Define your custom logging function by overriding this #define
 #ifndef _DEBUG
 	#define _DEBUG(x)
+#else
+	#define _DEBUG_MODE
 #endif
 
 
 
 #include <deque>
 #include <set>
-#include <boost/shared_ptr.hpp>
-#include <boost/thread/mutex.hpp>
 #include <exception>
 #include <string>
+#include <boost/shared_ptr.hpp>
+#include <boost/thread/mutex.hpp>
+#include <boost/thread/locks.hpp>
+#include <boost/format.hpp>
 
 namespace active911 {
 
@@ -68,6 +73,8 @@ namespace active911 {
 
 		size_t pool_size;
 		size_t borrowed_size;
+		int retry_cnt;
+		int timeout_sec;
 
 	};
 
@@ -86,10 +93,13 @@ namespace active911 {
 			stats.pool_size=this->pool.size();
 			stats.borrowed_size=this->borrowed.size();			
 
+			// timeout
+			stats.timeout_sec=this->timeout_sec;
+
 			return stats;
 		};
 
-		ConnectionPool(size_t pool_size, boost::shared_ptr<ConnectionFactory> factory){
+		ConnectionPool(size_t pool_size, boost::shared_ptr<ConnectionFactory> factory, unsigned int timeout_sec=0){
 
 			// Setup
 			this->pool_size=pool_size;
@@ -101,13 +111,32 @@ namespace active911 {
 				this->pool.push_back(this->factory->create());
 			}
 
+			// timeout
+			if(timeout_sec>=0){
+
+				this->timeout_sec=timeout_sec;
+
+			}else{
+
+				this->timeout_sec=0;
+
+			}
+
+			// timelock
+			pthread_mutex_init(&timelock_mutex, NULL);
+			pthread_cond_init(&timelock_cond, NULL);
 
 		};
+
 
 		~ConnectionPool() {
 
+			// timelock
+			pthread_cond_destroy(&timelock_cond);
+			pthread_mutex_destroy(&timelock_mutex);
 
 		};
+
 
 		/**
 		 * Borrow
@@ -119,47 +148,95 @@ namespace active911 {
 		 */
 		boost::shared_ptr<T> borrow(){
 
-			// Lock
-			boost::mutex::scoped_lock lock(this->io_mutex);
-
-			// Check for a free connection
-			if(this->pool.size()==0){
-
-				// Are there any crashed connections listed as "borrowed"?
-				for(std::set<boost::shared_ptr<Connection> >::iterator it=this->borrowed.begin(); it!=this->borrowed.end(); ++it){
-
-					if((*it).unique()) {
-
-						// This connection has been abandoned! Destroy it and create a new connection
-						try {
-
-							// If we are able to create a new connection, return it
-							_DEBUG("Creating new connection to replace discarded connection");
-							boost::shared_ptr<Connection> conn=this->factory->create();
-							this->borrowed.erase(it);
-							this->borrowed.insert(conn);
-							return boost::static_pointer_cast<T>(conn);
-
-						} catch(std::exception& e) {
-
-							// Error creating a replacement connection
-							throw ConnectionUnavailable();
-						}
-					}
-				}
-
-				// Nothing available
-				throw ConnectionUnavailable();
+			// try_cnt == 1: one time, try_cnt > 2: time wait
+			int try_cnt=1;
+			if(timeout_sec){
+				try_cnt=2;
 			}
 
-			// Take one off the front
-			boost::shared_ptr<Connection>conn=this->pool.front();
-			this->pool.pop_front();
+			while(try_cnt--){
 
-			// Add it to the borrowed list
-			this->borrowed.insert(conn);
+				// Lock
+				boost::mutex::scoped_lock lock(this->io_mutex);
 
-			return boost::static_pointer_cast<T>(conn);
+				if(pool.empty()) {//fail
+
+					// Are there any crashed connections listed as "borrowed"?
+					for(std::set<boost::shared_ptr<Connection> >::iterator it=this->borrowed.begin(); it!=this->borrowed.end(); ++it){
+
+						if((*it).unique()) {
+
+							// This connection has been abandoned! Destroy it and create a new connection
+							try {
+
+								// If we are able to create a new connection, return it
+								_DEBUG("Creating new connection to replace discarded connection");
+								boost::shared_ptr<Connection> conn=this->factory->create();
+								this->borrowed.erase(it);
+								this->borrowed.insert(conn);
+								return boost::static_pointer_cast<T>(conn);
+
+							} catch(std::exception& e) {
+
+								break;
+
+							}
+						}
+					}
+
+					// Timelock
+					if(try_cnt){
+
+#ifdef _DEBUG_MODE
+						{
+							char tmp[128];
+							time_t now_time=time(NULL);
+							struct tm *t=localtime(&now_time);
+							snprintf(tmp,128,"[%02d:%02d:%02d] time lock tid:%x",
+									 t->tm_hour,t->tm_min,t->tm_sec,(unsigned int)pthread_self());
+							_DEBUG(tmp);
+						}
+#endif
+						lock.unlock();
+						struct timeval now;
+						struct timespec ts;
+						gettimeofday(&now, NULL);
+						ts.tv_sec = now.tv_sec + timeout_sec;
+						ts.tv_nsec = now.tv_usec * 1000;
+						pthread_mutex_lock(&timelock_mutex);
+						pthread_cond_timedwait(&timelock_cond, &timelock_mutex, &ts);
+						pthread_mutex_unlock(&timelock_mutex);
+
+#ifdef _DEBUG_MODE
+						{
+							char tmp[128];
+							time_t now_time=time(NULL);
+							struct tm *t=localtime(&now_time);
+							snprintf(tmp,128,"[%02d:%02d:%02d] time unlock pid:%x",
+									 t->tm_hour,t->tm_min,t->tm_sec,(unsigned int)pthread_self());
+							_DEBUG(tmp);
+						}
+#endif
+
+					}
+
+				}else{
+
+					// Take one off the front
+					boost::shared_ptr<Connection> conn = this->pool.front();
+					this->pool.pop_front();
+
+					// Add it to the borrowed list
+					this->borrowed.insert(conn);
+
+					return boost::static_pointer_cast<T>(conn);
+
+				}
+
+			}
+
+			throw ConnectionUnavailable();
+
 		};
 
 		/**
@@ -179,6 +256,9 @@ namespace active911 {
 			// Unborrow
 			this->borrowed.erase(conn);
 
+			// Timelock
+			pthread_cond_signal(&timelock_cond);
+
 		};
 
 	protected:
@@ -187,10 +267,10 @@ namespace active911 {
 		std::deque<boost::shared_ptr<Connection> > pool;
 		std::set<boost::shared_ptr<Connection> > borrowed;
 		boost::mutex io_mutex;
+		unsigned int timeout_sec;
 
+		pthread_cond_t timelock_cond;
+		pthread_mutex_t timelock_mutex;
 	};
-
-
-
 
 }

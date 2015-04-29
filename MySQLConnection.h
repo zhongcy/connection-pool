@@ -12,7 +12,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- #include "ConnectionPool.h"
+
+#pragma once
+
+#include "ConnectionPool.h"
 #include <string>
 #include "mysql_connection.h"
 #include <cppconn/driver.h>
@@ -75,9 +78,9 @@ namespace active911 {
 		};
 
 	private:
-		string server;
-		string username;
-		string password;
+		std::string server;
+		std::string username;
+		std::string password;
 	};
 
 
