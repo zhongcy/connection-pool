@@ -1,24 +1,8 @@
-/* Copyright 2013 Active911 Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http: *www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 // Log to stdout
 #define _DEBUG(x) 										\
 	do { 												\
 		std::cout << "  (" << x << ")" << std::endl;	\
 	} while(0)
-
 
 #include <iostream>
 #include <string>
@@ -30,7 +14,7 @@
 using namespace active911;
 using namespace std;
 
-boost::shared_ptr<ConnectionPool<DummyConnection> >pool;
+static boost::shared_ptr<ConnectionPool<DummyConnection> >pool;
 
 void *getConnection(void *) {
 	boost::shared_ptr<DummyConnection> conn=pool->borrow();

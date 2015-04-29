@@ -187,6 +187,16 @@ namespace active911 {
 					// Timelock
 					if(try_cnt){
 
+#ifdef _DEBUG_MODE
+						{
+							char tmp[128];
+							time_t now_time=time(NULL);
+							struct tm *t=localtime(&now_time);
+							snprintf(tmp,128,"[%02d:%02d:%02d] time lock tid:%x",
+									 t->tm_hour,t->tm_min,t->tm_sec,(unsigned int)pthread_self());
+							_DEBUG(tmp);
+						}
+#endif
 						lock.unlock();
 						struct timeval now;
 						struct timespec ts;
@@ -196,6 +206,17 @@ namespace active911 {
 						pthread_mutex_lock(&timelock_mutex);
 						pthread_cond_timedwait(&timelock_cond, &timelock_mutex, &ts);
 						pthread_mutex_unlock(&timelock_mutex);
+
+#ifdef _DEBUG_MODE
+						{
+							char tmp[128];
+							time_t now_time=time(NULL);
+							struct tm *t=localtime(&now_time);
+							snprintf(tmp,128,"[%02d:%02d:%02d] time unlock pid:%x",
+									 t->tm_hour,t->tm_min,t->tm_sec,(unsigned int)pthread_self());
+							_DEBUG(tmp);
+						}
+#endif
 
 					}
 

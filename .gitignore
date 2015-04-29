@@ -13,4 +13,4 @@
 *.a
 
 # Test Output File
-test/test_[0-9]*
+test/test_[0-9]

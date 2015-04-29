@@ -13,8 +13,6 @@
  * limitations under the License.
  */
 
-#pragma once
-
 // Log to stdout
 #define _DEBUG(x) 										\
 	do { 												\
