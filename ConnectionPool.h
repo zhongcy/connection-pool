@@ -198,7 +198,6 @@ namespace active911 {
 						pthread_mutex_lock(&timelock_mutex);
 						pthread_cond_timedwait(&timelock_cond, &timelock_mutex, &ts);
 						pthread_mutex_unlock(&timelock_mutex);
-						lock.lock();
 
 #ifdef _DEBUG_MODE
 						{
