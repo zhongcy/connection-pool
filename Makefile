@@ -10,7 +10,7 @@ test: $(OUTS_TEST)
 	/usr/bin/env perl run_tests.pl
 
 test/test_%: test/test_%.o
-	$(CXX) $^ -o $@ -lpthread -lrt
+	$(CXX) $^ -o $@ -lpthread -lrt -g
 
 test/test_%.o: test/test_%.cpp $(DEP_HEAD)
 	$(CXX) -Wall $(INC) -c $< -o $@ --std=c++0x

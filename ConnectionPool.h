@@ -112,15 +112,7 @@ namespace active911 {
 			}
 
 			// timeout
-			if(timeout_sec>=0){
-
-				this->timeout_sec=timeout_sec;
-
-			}else{
-
-				this->timeout_sec=0;
-
-			}
+			this->timeout_sec=timeout_sec;
 
 			// timelock
 			pthread_mutex_init(&timelock_mutex, NULL);
@@ -148,13 +140,18 @@ namespace active911 {
 		 */
 		boost::shared_ptr<T> borrow(){
 
-			// try_cnt == 1: one time, try_cnt > 2: time wait
-			int try_cnt=1;
-			if(timeout_sec){
-				try_cnt=2;
-			}
+			// Timelock
+			struct timeval now;
+			struct timespec ts;
+			gettimeofday(&now, NULL);
+			ts.tv_sec = now.tv_sec + timeout_sec;
+			ts.tv_nsec = now.tv_usec * 1000;
+			int64_t lock_usec=ts.tv_sec*1000000+now.tv_usec;
+			int64_t now_usec;
 
-			while(try_cnt--){
+			int cnt = 0;
+
+			do{
 
 				// Lock
 				boost::mutex::scoped_lock lock(this->io_mutex);
@@ -185,7 +182,9 @@ namespace active911 {
 					}
 
 					// Timelock
-					if(try_cnt){
+					gettimeofday(&now, NULL);
+					now_usec=now.tv_sec*1000000+now.tv_usec;
+					if(lock_usec>now_usec){
 
 #ifdef _DEBUG_MODE
 						{
@@ -198,14 +197,10 @@ namespace active911 {
 						}
 #endif
 						lock.unlock();
-						struct timeval now;
-						struct timespec ts;
-						gettimeofday(&now, NULL);
-						ts.tv_sec = now.tv_sec + timeout_sec;
-						ts.tv_nsec = now.tv_usec * 1000;
 						pthread_mutex_lock(&timelock_mutex);
 						pthread_cond_timedwait(&timelock_cond, &timelock_mutex, &ts);
 						pthread_mutex_unlock(&timelock_mutex);
+						lock.lock();
 
 #ifdef _DEBUG_MODE
 						{
@@ -233,7 +228,9 @@ namespace active911 {
 
 				}
 
-			}
+				gettimeofday(&now, NULL);
+				now_usec=now.tv_sec*1000000+now.tv_usec;
+			}while(lock_usec>now_usec);
 
 			throw ConnectionUnavailable();
 
