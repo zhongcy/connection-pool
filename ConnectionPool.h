@@ -149,8 +149,6 @@ namespace active911 {
 			int64_t lock_usec=ts.tv_sec*1000000+now.tv_usec;
 			int64_t now_usec;
 
-			int cnt = 0;
-
 			do{
 
 				// Lock
