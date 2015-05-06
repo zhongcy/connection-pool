@@ -9,10 +9,10 @@ PKG_NAME = connection-pool-$(OS_VER).tar.bz2
 
 dist: $(DIST_DIR)
 	# prep header files
-	cp -r ../*.h $(DIST_DIR)/include/
+	cp -r ../*.h $(DIST_DIR)/include/active911/
 
 $(DIST_DIR):
-	mkdir -p $(DIST_DIR)/include
+	mkdir -p $(DIST_DIR)/include/active911/
 
 pkg: dist
 	$(info -------------------------)
