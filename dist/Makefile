@@ -1,10 +1,10 @@
 .PHONY: pkg all clean dist
 
-include ../version.mk
+OS_VER = $(shell (ver=$$(awk '{print $$3}' /etc/redhat-release); echo "CentOS$${ver}"; ))
 
 DIST_DIR = connection-pool
 
-PKG_NAME = connection-pool_$(VER_MAJOR).$(VER_MINOR).$(VER_PATCH)_$(OS_VER).tar.bz2
+PKG_NAME = connection-pool-$(OS_VER).tar.bz2
 
 
 dist: $(DIST_DIR)
