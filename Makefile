@@ -22,3 +22,6 @@ test/test_%.o: test/test_%.cpp $(DEP_HEAD)
 clean:
 	$(RM) $(OBJS_TEST) $(OUTS_TEST)
 
+pkg:
+	make -C dist pkg
+
