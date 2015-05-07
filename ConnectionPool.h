@@ -67,6 +67,7 @@ namespace active911 {
 
 	public:
 		virtual boost::shared_ptr<Connection> create()=0;
+		virtual ~ConnectionFactory(){};
 	};
 
 	struct ConnectionPoolStats {
