@@ -36,6 +36,11 @@ namespace active911 {
 
 		};
 
+		virtual bool isClosed()
+		{
+		    return false;
+		}
+
 		// shared_ptr to some kind of actual connection object would go here
 
 	};
