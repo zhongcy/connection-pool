@@ -61,7 +61,7 @@ Debugging may be enabled by using the ```#define _DEBUG(x)``` macro:
 ### Dependencies
 
 - Boost
-- Connection/C++ (for MySQL implementation)
+- Connection/C++ 1.1.5(for MySQL implementation)
 
 
 
