@@ -45,13 +45,17 @@ namespace active911 {
 
 		};
 
-		virtual bool isClosed()
-		{
-		    return this->sql_connection->isClosed();
-		}
+        bool isValid()
+        {
+            return this->sql_connection->isValid();
+        }
+
+        bool reconnect()
+        {
+            return this->sql_connection->reconnect();
+        }
 
 		boost::shared_ptr<sql::Connection> sql_connection;
-		int a;
 	};
 
 

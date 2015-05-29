@@ -60,7 +60,8 @@ namespace active911 {
 	public:
 		Connection(){};
 		virtual ~Connection(){};
-		virtual bool isClosed() = 0;
+		virtual bool isValid() = 0;
+        virtual bool reconnect() = 0;
 	};
 
 	class ConnectionFactory {
@@ -219,10 +220,13 @@ namespace active911 {
 					boost::shared_ptr<Connection> conn = this->pool.front();
 					this->pool.pop_front();
 
-					if( conn->isClosed() )
-					{
-					    conn = this->factory->create();
-					}
+					if(false == conn->isValid())
+                    {
+                        if(false == conn->reconnect())
+                        {
+                            throw ConnectionUnavailable();
+                        }
+                    }
 
 					// Add it to the borrowed list
 					this->borrowed.insert(conn);

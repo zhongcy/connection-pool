@@ -36,10 +36,15 @@ namespace active911 {
 
 		};
 
-		virtual bool isClosed()
-		{
-		    return false;
-		}
+        bool isValid()
+        {
+            return true;
+        }
+
+        bool reconnect()
+        {
+            return true;
+        }
 
 		// shared_ptr to some kind of actual connection object would go here
 
