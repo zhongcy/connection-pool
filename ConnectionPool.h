@@ -4,7 +4,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http: *www.apache.org/licenses/LICENSE-2.0
+ *	http: *www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -60,7 +60,8 @@ namespace active911 {
 	public:
 		Connection(){};
 		virtual ~Connection(){};
-
+		virtual bool isValid() = 0;
+		virtual bool reconnect() = 0;
 	};
 
 	class ConnectionFactory {
@@ -218,6 +219,14 @@ namespace active911 {
 					// Take one off the front
 					boost::shared_ptr<Connection> conn = this->pool.front();
 					this->pool.pop_front();
+
+					if(false == conn->isValid())
+					{
+						if(false == conn->reconnect())
+						{
+							throw ConnectionUnavailable();
+						}
+					}
 
 					// Add it to the borrowed list
 					this->borrowed.insert(conn);
