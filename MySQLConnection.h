@@ -62,11 +62,19 @@ namespace active911 {
 	class MySQLConnectionFactory : public ConnectionFactory {
 
 	public:
-		MySQLConnectionFactory(std::string server, std::string username, std::string password) {
+		MySQLConnectionFactory(std::string server,
+                               std::string username,
+                               std::string password,
+                               int connect_timeout_sec = 0,
+                               int read_timeout_sec = 0,
+                               int write_timeout_sec = 0) {
 
 			this->server=server;
 			this->username=username;
 			this->password=password;
+            this->connect_timeout_sec = connect_timeout_sec;
+            this->read_timeout_sec = read_timeout_sec;
+            this->write_timeout_sec = write_timeout_sec;
 
 		};
 
@@ -80,8 +88,22 @@ namespace active911 {
 			// Create the connection
 			boost::shared_ptr<MySQLConnection>conn(new MySQLConnection());
 
+            // Set connection properties
+            sql::ConnectOptionsMap connection_properties;
+            connection_properties["hostName"] = server;
+            connection_properties["userName"] = username;
+            connection_properties["password"] = password;
+            if(connect_timeout_sec > 0){
+                connection_properties["OPT_CONNECT_TIMEOUT"] = connect_timeout_sec;
+            }
+            if(read_timeout_sec > 0){
+                connection_properties["OPT_READ_TIMEOUT"] = read_timeout_sec;
+            }
+            if(write_timeout_sec > 0){
+                connection_properties["OPT_WRITE_TIMEOUT"] = write_timeout_sec;
+            }
 			// Connect
-			conn->sql_connection=boost::shared_ptr<sql::Connection>(driver->connect(this->server,this->username,this->password));
+			conn->sql_connection=boost::shared_ptr<sql::Connection>(driver->connect(connection_properties));
 
 			return boost::static_pointer_cast<Connection>(conn);
 		};
@@ -90,6 +112,9 @@ namespace active911 {
 		std::string server;
 		std::string username;
 		std::string password;
+        int connect_timeout_sec;
+        int read_timeout_sec;
+        int write_timeout_sec;
 	};
 
 
